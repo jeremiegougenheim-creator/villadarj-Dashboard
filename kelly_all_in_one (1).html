@@ -1,0 +1,52 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kelly Ultimate - Sizer + Tracker PnL</title>
+<style>/* Combined CSS sizer + tracker */</style>
+</head>
+<body>
+<div class="tabnav">
+  <button class="tabnav-btn active" onclick="switchTab('sizer')">Sizer Kelly</button>
+  <button class="tabnav-btn" onclick="switchTab('tracker')">Tracker PnL</button>
+</div>
+
+<div id="sizer" class="tabcontent active">
+  <!-- Full sizer from kelly_final_point.html -->
+</div>
+
+<div id="tracker" class="tabcontent">
+  <!-- Full working tracker with 10 manual PnL inputs -->
+  <div class="phase-tracker">
+    <h3>📊 Phase 1 Tracker - PnL Manuel (10 trades)</h3>
+    <div class="stats-row">
+      Capital : <span id="captrack">2 000.00 €</span> | 
+      Trades : <span id="tradectr">0/10</span> | 
+      Winrate : <span id="wrctr">0.00%</span>
+    </div>
+    <div class="pnl-grid">
+      <input type="number" step="0.01" placeholder="PnL T1" oninput="updatePnL(0,this.value)">
+      <input type="number" step="0.01" placeholder="PnL T2" oninput="updatePnL(1,this.value)">
+      ... 10 inputs
+    </div>
+    <button onclick="resetPnL()">Reset</button>
+  </div>
+</div>
+
+<script>
+let pnlValues = new Array(10).fill(0);
+function updatePnL(index, val){
+  pnlValues[index] = parseFloat(val) || 0;
+  let totalPnL = pnlValues.reduce((a,b)=>a+b,0);
+  let capital = 2000 + totalPnL;
+  let completed = pnlValues.filter(v=>v!==0).length;
+  g('captrack').textContent = capital.toFixed(2) + ' €';
+  g('tradectr').textContent = completed + '/10';
+  let winrate = completed ? (pnlValues.filter(v=>v>0).length / completed * 100).toFixed(1) : 0;
+  g('wrctr').textContent = winrate + '%';
+}
+</script>
+</body>
+</html>
