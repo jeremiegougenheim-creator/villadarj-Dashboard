@@ -364,11 +364,19 @@ main{padding:24px 32px;max-width:1400px;margin:0 auto}
           </div>
           <div style="text-align:center">
             <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:var(--gold)" id="crmTotalRevenue">0€</div>
-            <div style="font-size:9px;letter-spacing:2px;color:rgba(253,246,236,.4)">REVENUS</div>
+            <div style="font-size:9px;letter-spacing:2px;color:rgba(253,246,236,.4)">BRUT TOTAL</div>
+          </div>
+          <div style="text-align:center;border-left:1px solid rgba(201,168,76,.3);padding-left:24px">
+            <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:#7BC47F" id="crmNetRevenue">0€</div>
+            <div style="font-size:9px;letter-spacing:2px;color:rgba(253,246,236,.4)">NET VOUS</div>
           </div>
           <div style="text-align:center">
             <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:var(--gold)" id="crmAvgPrice">0€</div>
             <div style="font-size:9px;letter-spacing:2px;color:rgba(253,246,236,.4)">MOY/NUIT</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:var(--gold)" id="crmNetAvg">0€</div>
+            <div style="font-size:9px;letter-spacing:2px;color:rgba(253,246,236,.4)">NET/NUIT</div>
           </div>
           <div style="text-align:center">
             <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:var(--gold)" id="crmReturnRate">0%</div>
@@ -1828,9 +1836,19 @@ function updateCrmStats() {
   const returning = clients.filter(c => c.type === 'returning').length;
   const returnRate = total > 0 ? Math.round(returning / total * 100) : 0;
 
+  // Net = prix déjà net si source != Airbnb, sinon *0.83
+  const netRevenue = clients.reduce((s,c) => {
+    const p = c.price || 0;
+    const isAirbnb = (c.source||'').toLowerCase().includes('airbnb');
+    return s + (isAirbnb ? Math.round(p * 0.83) : p);
+  }, 0);
+  const netAvgPN = nights > 0 ? Math.round(netRevenue / nights) : 0;
+
   document.getElementById('crmTotalClients').textContent = total;
   document.getElementById('crmTotalRevenue').textContent = revenue > 0 ? revenue.toLocaleString('fr')+'€' : '0€';
+  document.getElementById('crmNetRevenue').textContent = netRevenue > 0 ? netRevenue.toLocaleString('fr')+'€' : '0€';
   document.getElementById('crmAvgPrice').textContent = avgPN > 0 ? avgPN.toLocaleString('fr')+'€' : '0€';
+  document.getElementById('crmNetAvg').textContent = netAvgPN > 0 ? netAvgPN.toLocaleString('fr')+'€' : '0€';
   document.getElementById('crmReturnRate').textContent = returnRate + '%';
 }
 
