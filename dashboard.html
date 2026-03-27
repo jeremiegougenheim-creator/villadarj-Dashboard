@@ -418,8 +418,8 @@ main{padding:24px 32px;max-width:1400px;margin:0 auto}
 
       <!-- AIRBNB PASTE ZONE -->
       <div style="margin-bottom:20px;padding:14px;background:var(--bg);border-radius:8px;border:1px dashed rgba(44,31,20,.2)">
-        <div style="font-size:10px;letter-spacing:3px;color:var(--text3);margin-bottom:8px">IMPORT AUTOMATIQUE AIRBNB</div>
-        <textarea id="airbnbPaste" rows="4" placeholder="Collez ici le texte de votre confirmation Airbnb (email ou message)...&#10;&#10;Ex: Jean Dupont · Arrivée 15 mai · Départ 22 mai · 6 voyageurs · 4 550 €" onpaste="event.stopPropagation()" style="width:100%;padding:8px 10px;border:1px solid rgba(44,31,20,.12);border-radius:6px;font-size:12px;font-family:'Josefin Sans',sans-serif;background:var(--cream);color:var(--text);resize:vertical"></textarea>
+        <div style="font-size:10px;letter-spacing:3px;color:var(--text3);margin-bottom:8px">IMPORT AUTOMATIQUE — AIRBNB OU WHATSAPP</div>
+        <textarea id="airbnbPaste" rows="4" placeholder="Collez ici un email Airbnb, une conversation WhatsApp, ou un message direct...&#10;&#10;Le système détecte automatiquement le format et extrait les infos." onpaste="event.stopPropagation()" style="width:100%;padding:8px 10px;border:1px solid rgba(44,31,20,.12);border-radius:6px;font-size:12px;font-family:'Josefin Sans',sans-serif;background:var(--cream);color:var(--text);resize:vertical"></textarea>
         <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
           <button onclick="parseAirbnb()" style="background:var(--green);color:var(--cream);border:none;border-radius:6px;padding:7px 16px;font-size:11px;cursor:pointer;font-family:'Josefin Sans',sans-serif;letter-spacing:1px">Extraire automatiquement</button>
           <button onclick="document.getElementById('airbnbPaste').value=''" style="background:none;border:1px solid rgba(44,31,20,.15);border-radius:6px;padding:7px 12px;font-size:11px;cursor:pointer;font-family:'Josefin Sans',sans-serif;color:var(--text3)">Effacer</button>
@@ -1133,179 +1133,225 @@ async function loadAll() {
 }
 
 function parseAirbnb() {
-  const text = document.getElementById('airbnbPaste').value;
-  if (!text.trim()) { showParseMsg('Collez d\'abord un texte Airbnb', false); return; }
+  const raw = document.getElementById('airbnbPaste').value;
+  if (!raw.trim()) { showParseMsg('Collez d\'abord un texte', false); return; }
 
+  // Detect format
+  const isWhatsApp = /\[\d{1,2}\/\d{1,2}\/\d{4},/.test(raw);
+  const isAirbnb = /airbnb|Check-in|Check-out|You earn|Confirmation code/i.test(raw);
+
+  if (isWhatsApp) {
+    parseWhatsApp(raw);
+  } else if (isAirbnb) {
+    parseAirbnbEmail(raw);
+  } else {
+    // Try both
+    parseAirbnbEmail(raw);
+  }
+}
+
+function parseWhatsApp(text) {
   let found = 0;
 
-  // NAME — "Seán arrives" / "Seán Magne" / "Voyageur : X"
-  // Exclude known non-names: country names, platform names, common words
-  const NON_NAMES = /^(United|Kingdom|States|Ireland|France|Germany|Spain|Italy|Belgium|Netherlands|Switzerland|Airbnb|Booking|Identity|Guest|Check|Send|More|Allow|Read|Visit|Get|Learn|View|Your|Host|Guest|Total|Payment|Aircover|Customer|Support)$/i;
-  const namePatterns = [
-    /New booking confirmed!\s+([\wÀ-ÿ]+)\s+arrives/i,
-    /welcome\s+([\wÀ-ÿ]+)\b/i,
-    /Send\s+([\wÀ-ÿ]+)\s+a Message/i,
-    /(?:Voyageur|Guest|Réservé par|Booked by)[:\s]+([\wÀ-ÿ][^\n]+)/i,
-    /^([\wÀ-ÿ]+\s+[\wÀ-ÿ]+)\s*$/m,
-  ];
-  for (const p of namePatterns) {
-    const m = text.match(p);
-    if (m) {
-      const name = m[1].trim();
-      const firstWord = name.split(' ')[0];
-      if (name.length > 1 && !NON_NAMES.test(firstWord)) {
-        document.getElementById('crmName').value = name;
-        found++; break;
-      }
+  // Extract all messages with author
+  // Format: [DD/MM/YYYY, HH:MM:SS] Author: message
+  const msgRegex = /\[(\d{1,2}\/\d{1,2}\/\d{4}),\s*[\d:]+\]\s*([^:]+):\s*([\s\S]*?)(?=\[\d|$)/g;
+  const messages = [];
+  let m;
+  while ((m = msgRegex.exec(text)) !== null) {
+    messages.push({ date: m[1], author: m[2].trim(), body: m[3].trim() });
+  }
+
+  // Find guest name = first non-Jeremie author
+  const guestMsg = messages.find(m => !/jeremie|jérémie|gougenheim/i.test(m.author));
+  if (guestMsg) {
+    document.getElementById('crmName').value = guestMsg.author;
+    found++;
+  }
+
+  // Source = Direct WhatsApp
+  document.getElementById('crmSource').value = 'Direct — WhatsApp';
+
+  // Find dates — look for "du X au Y" or "vendredi X au lundi Y"
+  const duAuMatch = text.match(/du\s+(\d{1,2}(?:\s+\w+)?)\s+(?:au|jusqu.au)\s+(\d{1,2}(?:\s+\w+)?(?:\s+\d{4})?)/i);
+  if (duAuMatch) {
+    // Extract month from surrounding context
+    const monthCtx = text.match(/du\s+\d{1,2}\s+au\s+\d{1,2}\s+(\w+)/i);
+    const month = monthCtx ? monthCtx[1] : '';
+    const year = text.match(/20\d{2}/)?.[0] || new Date().getFullYear().toString();
+    const arr = parseFlexDate(duAuMatch[1] + ' ' + month + ' ' + year);
+    const dep = parseFlexDate(duAuMatch[2] + (duAuMatch[2].match(/\d{4}/) ? '' : ' ' + month + ' ' + year));
+    if (arr) { document.getElementById('crmArrival').value = arr; found++; }
+    if (dep) { document.getElementById('crmDeparture').value = dep; found++; }
+  }
+
+  // Also try specific date patterns from messages
+  if (!document.getElementById('crmArrival').value) {
+    // "vendredi 3 au lundi 6 avril 2026"
+    const dateRange = text.match(/(?:vendredi|lundi|mardi|mercredi|jeudi|samedi|dimanche)?\s*(\d{1,2})\s+au\s+(?:vendredi|lundi|mardi|mercredi|jeudi|samedi|dimanche)?\s*(\d{1,2})\s+(\w+)\s+(20\d{2})/i);
+    if (dateRange) {
+      const arr = parseFlexDate(dateRange[1] + ' ' + dateRange[3] + ' ' + dateRange[4]);
+      const dep = parseFlexDate(dateRange[2] + ' ' + dateRange[3] + ' ' + dateRange[4]);
+      if (arr) { document.getElementById('crmArrival').value = arr; found++; }
+      if (dep) { document.getElementById('crmDeparture').value = dep; found++; }
     }
   }
 
-  // ARRIVAL — Airbnb + WhatsApp formats
-  const arrPatterns = [
-    /Check-in\s*\n\s*(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
-    /arrives?\s+(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
-    /(?:Arrivée|Arrival|Check.in|checkin|check in)[:\s]+([^\n]+)/i,
-    /Check-in\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
-    // WhatsApp: "on arrive le 23 avril" / "nous arrivons le 15 mai"
-    /(?:on arrive|nous arrivons|j'arrive|arrive)[^\d]*(\d{1,2}[^\d]+(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc|apr|jul|aug)[a-z]*\.?(?:\s+\d{4})?)/i,
-    // "du 23 au 27 avril" format
-    /du\s+(\d{1,2}\s+(?:au\s+\d{1,2}\s+)?(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc)[a-z]*\.?(?:\s+\d{4})?)/i,
-    // "23/04" or "23-04-2026"
-    /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)/,
-  ];
-  for (const p of arrPatterns) {
-    const m = text.match(p);
-    if (m) {
-      const d = parseFlexDate(m[1].trim());
-      if (d) { document.getElementById('crmArrival').value = d; found++; }
-      break;
-    }
-  }
-
-  // DEPARTURE — Airbnb + WhatsApp formats
-  const depPatterns = [
-    /Check(?:out|-out)\s*\n\s*(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
-    /(?:Départ|Departure|Check.out|checkout|check out)[:\s]+([^\n]+)/i,
-    /Check(?:out|-out)\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
-    // WhatsApp: "on repart le 27" / "nous repartons le 27 avril"
-    /(?:on repart|nous repartons|je repars|repart)[^\d]*(\d{1,2}[^\d]*(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc|apr|jul|aug)[a-z]*\.?(?:\s+\d{4})?)/i,
-    // "du 23 au 27 avril" — extract the "au 27" part
-    /au\s+(\d{1,2}\s+(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc|apr|jul|aug)[a-z]*\.?(?:\s+\d{4})?)/i,
-  ];
-  for (const p of depPatterns) {
-    const m = text.match(p);
-    if (m) {
-      const d = parseFlexDate(m[1].trim());
-      if (d) { document.getElementById('crmDeparture').value = d; found++; }
-      break;
-    }
-  }
-
-  // GUESTS — Airbnb + WhatsApp
+  // Guests: "pour 10 personnes" / "groupe de 10" / "nous serons X"
   const guestPatterns = [
-    /(\d+)\s*adults?/i,
-    /(\d+)\s*(?:voyageur|guest|personne|adulte)/i,
-    /Guests?\s*\n\s*(\d+)/i,
-    // WhatsApp: "nous serons 6" / "on sera 4 personnes"
-    /(?:nous serons|on sera|nous sommes|on est|serons)\s+(\d+)/i,
-    /(\d+)\s*(?:personnes|people|adultes|adults)/i,
+    /(?:pour|groupe de|nous serons|on sera|serons)\s+(\d+)\s*(?:personnes|pers|invités)?/i,
+    /(\d+)\s*(?:personnes|pers\b|invités|adultes)/i,
+    /\b(\d+)\s*pers\b/i,
   ];
   for (const p of guestPatterns) {
-    const m = text.match(p);
-    if (m) { document.getElementById('crmGuests').value = m[1]; found++; break; }
+    const mg = text.match(p);
+    if (mg && parseInt(mg[1]) > 1 && parseInt(mg[1]) <= 20) {
+      document.getElementById('crmGuests').value = mg[1]; found++; break;
+    }
   }
 
-  // PRICE — Airbnb + WhatsApp
-  // Prefer "You earn" = your net payout
-  const earnMatch = text.match(/You earn\s*\n?\s*€\s*([\d,\.]+)/i);
-  if (earnMatch) {
-    const price = Math.round(parseFloat(earnMatch[1].replace(/,/g, '')));
-    document.getElementById('crmPrice').value = price;
+  // Price: "600 euros par nuit" × nights, or total mentioned
+  const pricePerNight = text.match(/(\d+)\s*(?:euros?|€)\s*(?:par|la)\s*nuit/i);
+  if (pricePerNight) {
+    const nights = getNights({
+      arrival: document.getElementById('crmArrival').value,
+      departure: document.getElementById('crmDeparture').value
+    });
+    const total = parseInt(pricePerNight[1]) * (nights || 1);
+    document.getElementById('crmPrice').value = total;
     found++;
-  } else {
-    const totalMatch = text.match(/Total\s*\(EUR\)\s*\n?\s*€\s*([\d,\.]+)/i) ||
-                       text.match(/(?:Total|Montant)[^\d€]*€\s*([\d,\.]+)/i) ||
-                       text.match(/€\s*([\d,\.]+)\s*x\s*\d+\s*nights?/i);
-    if (totalMatch) {
-      const price = Math.round(parseFloat(totalMatch[1].replace(/,/g, '')));
-      if (price > 100) { document.getElementById('crmPrice').value = price; found++; }
-    }
   }
 
-  // NIGHTS — "x 4 nights" 
-  const nightsMatch = text.match(/x\s*(\d+)\s*nights?/i);
-  if (nightsMatch) {
-    const n = parseInt(nightsMatch[1]);
-    if (n > 0 && n < 365) {
-      // If we have arrival but not departure, calculate it
-      const arr = document.getElementById('crmArrival').value;
-      const dep = document.getElementById('crmDeparture').value;
-      if (arr && !dep) {
-        const d = new Date(arr);
-        d.setDate(d.getDate() + n);
-        document.getElementById('crmDeparture').value = d.toISOString().slice(0,10);
-        found++;
-      }
-    }
-  }
-
-  // CONFIRMATION CODE
-  const codeMatch = text.match(/Confirmation code\s*\n?\s*([A-Z0-9]{8,12})/i);
-  if (codeMatch) {
-    const notes = document.getElementById('crmNotes');
-    const codeStr = 'Code Airbnb: ' + codeMatch[1];
-    if (!notes.value.includes(codeStr)) {
-      notes.value = (notes.value ? notes.value + '\n' : '') + codeStr;
-    }
-  }
-
-  // NATIONALITY from city/country line
-  const natText = text.toLowerCase();
-  const nat = document.getElementById('crmNat');
-  if (/united kingdom|england|london|manchester|birmingham|leeds|glasgow|edinburgh|bristol|liverpool/i.test(natText)) nat.value = '🇬🇧 Britannique';
-  else if (/ireland|dublin|cork/i.test(natText)) nat.value = '🇬🇧 Britannique';
-  else if (/france|paris|lyon|marseille|bordeaux|toulouse|nice|saint-|nantes|strasbourg|montpellier|rennes/i.test(natText)) nat.value = '🇫🇷 Français';
-  else if (/belgique|belgium|bruxelles|brussels|antwerp|liège|ghent/i.test(natText)) nat.value = '🇧🇪 Belge';
-  else if (/suisse|switzerland|geneva|zürich|lausanne|berne|bâle/i.test(natText)) nat.value = '🇨🇭 Suisse';
-  else if (/netherlands|amsterdam|rotterdam|utrecht|holland/i.test(natText)) nat.value = '🇳🇱 Néerlandais';
-  else if (/germany|deutschland|berlin|munich|hamburg|frankfurt|cologne/i.test(natText)) nat.value = '🇩🇪 Allemand';
-  else if (/spain|españa|madrid|barcelona|valencia|seville/i.test(natText)) nat.value = '🇪🇸 Espagnol';
-  else if (/italy|italia|rome|milan|florence|naples/i.test(natText)) nat.value = '🇮🇹 Italien';
-  else if (/united states|usa|new york|los angeles|chicago|miami|california/i.test(natText)) nat.value = '🇺🇸 Américain';
-  else if (/canada|toronto|montreal|vancouver/i.test(natText)) nat.value = '🇨🇦 Canadien';
-  else if (/maroc|morocco|casablanca|rabat|fes|agadir/i.test(natText)) nat.value = '🇲🇦 Marocain';
-  else if (/uae|dubai|abu dhabi|emirates/i.test(natText)) nat.value = '🇦🇪 Émirati';
-  else if (/saudi|riyadh|jeddah/i.test(natText)) nat.value = '🇸🇦 Saoudien';
-
-  // MEALS — detect any meal mentions in French or English
+  // Meals: scan for meal keywords
   const mealKeywords = [
-    {re:/petit[\s-]?d[eé]jeuner/gi, label:'Petit-déjeuner'},
-    {re:/d[eé]jeuner(?!\s*inclus)/gi, label:'Déjeuner'},
-    {re:/d[iî]ner/gi, label:'Dîner'},
-    {re:/repas/gi, label:'Repas'},
-    {re:/cuisine\s+marocaine/gi, label:'Cuisine marocaine'},
     {re:/tajine/gi, label:'Tajine'},
     {re:/couscous/gi, label:'Couscous'},
     {re:/pastilla/gi, label:'Pastilla'},
     {re:/brunch/gi, label:'Brunch'},
-    {re:/breakfast/gi, label:'Breakfast'},
-    {re:/lunch/gi, label:'Lunch'},
+    {re:/d[iî]ner/gi, label:'Dîner'},
+    {re:/d[eé]jeuner/gi, label:'Déjeuner'},
+    {re:/petit[\s-]?d[eé]jeuner/gi, label:'Petit-déjeuner'},
+    {re:/repas/gi, label:'Repas'},
+    {re:/gâteau/gi, label:'Gâteau anniversaire'},
+    {re:/anniversaire/gi, label:'Anniversaire'},
     {re:/dinner/gi, label:'Dinner'},
-    {re:/meal/gi, label:'Meal'},
-    {re:/moroccan\s+food/gi, label:'Moroccan food'},
-    {re:/cooking\s+class/gi, label:'Cooking class'},
-    {re:/half[\s-]?board/gi, label:'Half board'},
-    {re:/full[\s-]?board/gi, label:'Full board'},
+    {re:/lunch/gi, label:'Lunch'},
+    {re:/breakfast/gi, label:'Breakfast'},
   ];
   const mealsFound = [];
-  mealKeywords.forEach(k => { if (k.re.test(text)) mealsFound.push(k.label); });
-  if (mealsFound.length > 0) {
-    document.getElementById('crmMeals').value = mealsFound.join(', ');
-    found++;
+  mealKeywords.forEach(k => { if (k.re.test(text) && !mealsFound.includes(k.label)) mealsFound.push(k.label); });
+  if (mealsFound.length) { document.getElementById('crmMeals').value = mealsFound.join(', '); found++; }
+
+  // Notes: copy full conversation
+  const notesEl = document.getElementById('crmNotes');
+  if (!notesEl.value) notesEl.value = text.substring(0, 1000) + (text.length > 1000 ? '...' : '');
+
+  // Remarks: special requests
+  const remarks = [];
+  if (/anniversaire|birthday/i.test(text)) remarks.push('Anniversaire — prévoir gâteau');
+  if (/allergi/i.test(text)) remarks.push('Allergie mentionnée — vérifier');
+  if (/piscine.*chauff|heated.*pool/i.test(text)) remarks.push('Question piscine chauffée');
+  if (/transfert|transport|chauffeur/i.test(text)) remarks.push('Transferts à organiser');
+  if (remarks.length) document.getElementById('crmRemarks').value = remarks.join('\n');
+
+  showParseMsg(found > 0 ? `✓ ${found} champs extraits depuis WhatsApp` : 'Peu de données reconnues — complétez manuellement', found > 0);
+}
+
+function parseAirbnbEmail(text) {
+  let found = 0;
+
+  // NAME
+  const namePatterns = [
+    /New booking confirmed!\s+(\w+)\s+arrives/i,
+    /([A-ZÀ-Ü][a-zà-ü]+\s+[A-ZÀ-Ü][a-zà-ü]+)\s*\n/,
+    /(?:Voyageur|Guest|Réservé par|Booked by)[:\s]+([^\n]+)/i,
+    /welcome\s+([A-ZÀ-Ü][a-zà-ü]+)/i,
+    /Send\s+([A-ZÀ-Ü][a-zà-ü]+)\s+a Message/i,
+  ];
+  for (const p of namePatterns) {
+    const m = text.match(p);
+    if (m && m[1].trim().length > 1) { document.getElementById('crmName').value = m[1].trim(); found++; break; }
   }
 
+  // ARRIVAL
+  const arrPatterns = [
+    /Check-in\s*\n\s*(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
+    /arrives?\s+(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
+    /(?:Arrivée|Arrival|Check.in)[:\s]+([^\n]+)/i,
+  ];
+  for (const p of arrPatterns) {
+    const m = text.match(p);
+    if (m) { const d = parseFlexDate(m[1].trim()); if (d) { document.getElementById('crmArrival').value = d; found++; } break; }
+  }
+
+  // DEPARTURE
+  const depPatterns = [
+    /Check(?:out|-out)\s*\n\s*(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
+    /(?:Départ|Departure|Check.out)[:\s]+([^\n]+)/i,
+  ];
+  for (const p of depPatterns) {
+    const m = text.match(p);
+    if (m) { const d = parseFlexDate(m[1].trim()); if (d) { document.getElementById('crmDeparture').value = d; found++; } break; }
+  }
+
+  // NIGHTS → calculate departure if missing
+  const nightsMatch = text.match(/x\s*(\d+)\s*nights?/i);
+  if (nightsMatch) {
+    const arr = document.getElementById('crmArrival').value;
+    const dep = document.getElementById('crmDeparture').value;
+    if (arr && !dep) {
+      const d = new Date(arr); d.setDate(d.getDate() + parseInt(nightsMatch[1]));
+      document.getElementById('crmDeparture').value = d.toISOString().slice(0,10); found++;
+    }
+  }
+
+  // GUESTS
+  const guestPatterns = [/(\d+)\s*adults?/i, /(\d+)\s*(?:voyageur|guest|personne)/i, /Guests?\s*\n\s*(\d+)/i];
+  for (const p of guestPatterns) {
+    const m = text.match(p); if (m) { document.getElementById('crmGuests').value = m[1]; found++; break; }
+  }
+
+  // PRICE — prefer "You earn"
+  const earnMatch = text.match(/You earn\s*\n?\s*€\s*([\d,\.]+)/i);
+  if (earnMatch) {
+    document.getElementById('crmPrice').value = Math.round(parseFloat(earnMatch[1].replace(/,/g, ''))); found++;
+  } else {
+    const totalMatch = text.match(/Total\s*\(EUR\)\s*\n?\s*€\s*([\d,\.]+)/i);
+    if (totalMatch) { document.getElementById('crmPrice').value = Math.round(parseFloat(totalMatch[1].replace(/,/g, ''))); found++; }
+  }
+
+  // CODE
+  const codeMatch = text.match(/Confirmation code\s*\n?\s*([A-Z0-9]{8,12})/i);
+  if (codeMatch) {
+    const notes = document.getElementById('crmNotes');
+    const codeStr = 'Code Airbnb: ' + codeMatch[1];
+    if (!notes.value.includes(codeStr)) notes.value = (notes.value ? notes.value + '\n' : '') + codeStr;
+  }
+
+  // NATIONALITY
+  const cityMatch = text.match(/([A-ZÀ-Ü][a-zà-ü\-]+(?:,\s*[A-Za-zÀ-Ü]+)?)\s*\n.*(?:verified|reviews)/i);
+  if (cityMatch) {
+    const nat = document.getElementById('crmNat');
+    const city = cityMatch[1];
+    if (/france|paris|lyon|marseille|bordeaux|toulouse|nice|saint/i.test(city)) nat.value = '🇫🇷 Français';
+    else if (/london|uk|england|manchester/i.test(city)) nat.value = '🇬🇧 Britannique';
+    else if (/belgique|bruxelles|brussels/i.test(city)) nat.value = '🇧🇪 Belge';
+    else if (/suisse|geneva|zürich|lausanne/i.test(city)) nat.value = '🇨🇭 Suisse';
+  }
+
+  // MEALS
+  const mealKeywords = [
+    {re:/petit[\s-]?d[eé]jeuner/gi, label:'Petit-déjeuner'},{re:/d[eé]jeuner(?!\s*inclus)/gi, label:'Déjeuner'},
+    {re:/d[iî]ner/gi, label:'Dîner'},{re:/repas/gi, label:'Repas'},{re:/tajine/gi, label:'Tajine'},
+    {re:/couscous/gi, label:'Couscous'},{re:/brunch/gi, label:'Brunch'},{re:/breakfast/gi, label:'Breakfast'},
+    {re:/lunch/gi, label:'Lunch'},{re:/dinner/gi, label:'Dinner'},{re:/cooking\s+class/gi, label:'Cooking class'},
+  ];
+  const mealsFound = [];
+  mealKeywords.forEach(k => { if (k.re.test(text) && !mealsFound.includes(k.label)) mealsFound.push(k.label); });
+  if (mealsFound.length) { document.getElementById('crmMeals').value = mealsFound.join(', '); found++; }
+
   document.getElementById('crmSource').value = 'Airbnb';
-  showParseMsg(found > 0 ? `✓ ${found} champs extraits automatiquement` : 'Format non reconnu — remplissez manuellement', found > 0);
+  showParseMsg(found > 0 ? `✓ ${found} champs extraits depuis Airbnb` : 'Format non reconnu — remplissez manuellement', found > 0);
 }
 
 function parseFlexDate(str) {
