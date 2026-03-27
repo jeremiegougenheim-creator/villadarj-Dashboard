@@ -157,27 +157,13 @@ main{padding:24px 32px;max-width:1400px;margin:0 auto}
 .crm-btn{background:none;border:1px solid rgba(44,31,20,.1);border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;font-family:'Josefin Sans',sans-serif;color:var(--text3)}
 .crm-btn:hover{border-color:var(--gold);color:var(--gold)}
 .crm-btn-del:hover{border-color:#E24B4A !important;color:#E24B4A !important}
-.login-screen{position:fixed;inset:0;background:var(--green3);display:flex;align-items:center;justify-content:center;z-index:9999}
-.login-box{background:var(--cream);border-radius:12px;padding:40px;width:320px;text-align:center}
-.login-logo{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:300;color:var(--green);letter-spacing:6px;margin-bottom:6px}
-.login-logo span{color:var(--gold)}
-.login-sub{font-size:10px;letter-spacing:3px;color:var(--text3);margin-bottom:32px}
-.login-input{width:100%;padding:10px 14px;border:1px solid rgba(44,31,20,.15);border-radius:6px;font-size:14px;font-family:'Josefin Sans',sans-serif;background:var(--bg);color:var(--text);text-align:center;letter-spacing:2px;margin-bottom:12px}
-.login-btn{width:100%;padding:12px;background:var(--green);color:var(--cream);border:none;border-radius:6px;font-size:11px;letter-spacing:3px;cursor:pointer;font-family:'Josefin Sans',sans-serif}
-.login-btn:hover{background:var(--green2)}
-.login-error{font-size:11px;color:#A32D2D;margin-top:8px;display:none}
+
+
 </style>
 <body>
 
-<div class="login-screen" id="loginScreen">
-  <div class="login-box">
-    <div class="login-logo">Dar<span>J</span></div>
-    <div class="login-sub">Revenue Intelligence · Accès privé</div>
-    <input class="login-input" type="password" id="loginPwd" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')checkLogin()">
-    <button class="login-btn" onclick="checkLogin()">Accéder au dashboard</button>
-    <div class="login-error" id="loginError">Mot de passe incorrect</div>
-  </div>
-</div>
+
+
 
 <header>
   <div class="logo">Dar<span>J</span> · Revenue Intelligence</div>
@@ -547,43 +533,6 @@ main{padding:24px 32px;max-width:1400px;margin:0 auto}
 </main>
 
 <script>
-const PWD_HASH = '7a4f2c8e1b9d3f6a5e2c8b4d7f1a3e9c';
-
-function hashStr(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const c = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + c;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(16).padStart(8,'0');
-}
-
-function checkLogin() {
-  const pwd = document.getElementById('loginPwd').value;
-  const correct = 'Jg004287!!!';
-  if (pwd === correct) {
-    try { sessionStorage.setItem('darj_auth', '1'); } catch(e) {}
-    document.getElementById('loginScreen').style.display = 'none';
-  } else {
-    const err = document.getElementById('loginError');
-    err.style.display = 'block';
-    document.getElementById('loginPwd').value = '';
-    document.getElementById('loginPwd').focus();
-    setTimeout(() => err.style.display = 'none', 3000);
-  }
-}
-
-function checkAuth() {
-  try {
-    if (sessionStorage.getItem('darj_auth') === '1') {
-      document.getElementById('loginScreen').style.display = 'none';
-    }
-  } catch(e) {}
-}
-
-checkAuth();
-
 const WEATHER_KEY = '796d11e58c122335c77cb055fd5e3814';
 const AVIATION_KEY = '365e212b94d85280fc046c60fc9b5047';
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyJ4KxKzNZFWAesv6MEDTzo1V5cGXUEFGvxla_vV2D1MMWmbgLFX6IyWM6jkMtEvvfC/exec';
@@ -1903,6 +1852,8 @@ loadAll();
 setInterval(loadWeather, 30 * 60 * 1000);
 // Full dashboard refresh every 10 min
 setInterval(loadAll, 10 * 60 * 1000);
+
+}
 </script>
 </body>
 </html>
