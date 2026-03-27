@@ -1160,12 +1160,18 @@ function parseAirbnb() {
     }
   }
 
-  // ARRIVAL — "Check-in\nThu 23 Apr" / "arrives 23 Apr" / "Arrivée"
+  // ARRIVAL — Airbnb + WhatsApp formats
   const arrPatterns = [
     /Check-in\s*\n\s*(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
     /arrives?\s+(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
-    /(?:Arrivée|Arrival|Check.in)[:\s]+([^\n]+)/i,
+    /(?:Arrivée|Arrival|Check.in|checkin|check in)[:\s]+([^\n]+)/i,
     /Check-in\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    // WhatsApp: "on arrive le 23 avril" / "nous arrivons le 15 mai"
+    /(?:on arrive|nous arrivons|j'arrive|arrive)[^\d]*(\d{1,2}[^\d]+(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc|apr|jul|aug)[a-z]*\.?(?:\s+\d{4})?)/i,
+    // "du 23 au 27 avril" format
+    /du\s+(\d{1,2}\s+(?:au\s+\d{1,2}\s+)?(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc)[a-z]*\.?(?:\s+\d{4})?)/i,
+    // "23/04" or "23-04-2026"
+    /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)/,
   ];
   for (const p of arrPatterns) {
     const m = text.match(p);
@@ -1176,11 +1182,15 @@ function parseAirbnb() {
     }
   }
 
-  // DEPARTURE — "Checkout\nMon 27 Apr" / "Départ"
+  // DEPARTURE — Airbnb + WhatsApp formats
   const depPatterns = [
     /Check(?:out|-out)\s*\n\s*(?:\w+\s+)?(\d{1,2}\s+\w+(?:\s+\d{4})?)/i,
-    /(?:Départ|Departure|Check.out)[:\s]+([^\n]+)/i,
+    /(?:Départ|Departure|Check.out|checkout|check out)[:\s]+([^\n]+)/i,
     /Check(?:out|-out)\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    // WhatsApp: "on repart le 27" / "nous repartons le 27 avril"
+    /(?:on repart|nous repartons|je repars|repart)[^\d]*(\d{1,2}[^\d]*(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc|apr|jul|aug)[a-z]*\.?(?:\s+\d{4})?)/i,
+    // "du 23 au 27 avril" — extract the "au 27" part
+    /au\s+(\d{1,2}\s+(?:jan|fév|mar|avr|mai|jun|juil|aoû|sep|oct|nov|déc|apr|jul|aug)[a-z]*\.?(?:\s+\d{4})?)/i,
   ];
   for (const p of depPatterns) {
     const m = text.match(p);
@@ -1191,18 +1201,21 @@ function parseAirbnb() {
     }
   }
 
-  // GUESTS — "3 adults" / "2 voyageurs"
+  // GUESTS — Airbnb + WhatsApp
   const guestPatterns = [
     /(\d+)\s*adults?/i,
-    /(\d+)\s*(?:voyageur|guest|personne)/i,
+    /(\d+)\s*(?:voyageur|guest|personne|adulte)/i,
     /Guests?\s*\n\s*(\d+)/i,
+    // WhatsApp: "nous serons 6" / "on sera 4 personnes"
+    /(?:nous serons|on sera|nous sommes|on est|serons)\s+(\d+)/i,
+    /(\d+)\s*(?:personnes|people|adultes|adults)/i,
   ];
   for (const p of guestPatterns) {
     const m = text.match(p);
     if (m) { document.getElementById('crmGuests').value = m[1]; found++; break; }
   }
 
-  // PRICE — "You earn\n€ 2,116.40" (net) or "Total (EUR)\n€ 2,600.00"
+  // PRICE — Airbnb + WhatsApp
   // Prefer "You earn" = your net payout
   const earnMatch = text.match(/You earn\s*\n?\s*€\s*([\d,\.]+)/i);
   if (earnMatch) {
@@ -1240,7 +1253,10 @@ function parseAirbnb() {
   const codeMatch = text.match(/Confirmation code\s*\n?\s*([A-Z0-9]{8,12})/i);
   if (codeMatch) {
     const notes = document.getElementById('crmNotes');
-    notes.value = (notes.value ? notes.value + '\n' : '') + 'Code Airbnb: ' + codeMatch[1];
+    const codeStr = 'Code Airbnb: ' + codeMatch[1];
+    if (!notes.value.includes(codeStr)) {
+      notes.value = (notes.value ? notes.value + '\n' : '') + codeStr;
+    }
   }
 
   // NATIONALITY from city/country line
