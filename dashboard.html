@@ -367,7 +367,10 @@ main{padding:24px 32px;max-width:1400px;margin:0 auto}
 
       <!-- CRM Header stats -->
       <div style="background:var(--green3);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div style="font-size:10px;letter-spacing:4px;color:rgba(253,246,236,.4)">CARNET DE CLIENTS · VILLA DARJ</div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="font-size:10px;letter-spacing:4px;color:rgba(253,246,236,.4)">CARNET DE CLIENTS · VILLA DARJ</div>
+          <button onclick="openCrmForm()" style="background:var(--gold);color:var(--green3);border:none;border-radius:6px;padding:6px 14px;font-size:10px;letter-spacing:2px;cursor:pointer;font-family:'Josefin Sans',sans-serif;font-weight:400;white-space:nowrap">+ Nouveau</button>
+        </div>
         <div style="display:flex;gap:24px;flex-wrap:wrap">
           <div style="text-align:center">
             <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:var(--gold)" id="crmTotalClients">0</div>
